@@ -1,0 +1,7 @@
+image: python:3.12-slim
+
+# First check only: can GitLab's runners reach the portal and read the full list?
+probe:
+  script:
+    - python -c "import urllib.request; print(urllib.request.urlopen('https://ipinfo.io/json', timeout=15).read().decode())" || true
+    - python tender_alerts.py --dry-run
