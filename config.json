@@ -1,0 +1,57 @@
+{
+  "url": "https://eproc.punjab.gov.pk/ActiveTenders.aspx",
+  "timezone": "Asia/Karachi",
+  "email_to": "",
+  "env_file": "",
+  "closing_soon_days": 5,
+  "send_when_nothing_new": true,
+  "ignore_phrases": [
+    "computer stationery",
+    "computer stationary",
+    "htv license",
+    "through pitb's online portal"
+  ],
+  "skip_titles_containing": [
+    "training material"
+  ],
+  "groups": [
+    {
+      "name": "Software & digital services",
+      "keywords": [
+        "software", "portal", "website", "web site", "web based", "web-based",
+        "web application*", "web development", "mobile app*", "android",
+        "application development", "app development", "system development",
+        "ERP", "LMS", "MIS", "HMIS", "CRM", "GIS", "OSM", "RFID", "SaaS", "IoT", "AI",
+        "AR/VR", "artificial intelligence", "machine learning",
+        "digitiz*", "digitis*", "digitaliz*", "automation", "e-governance",
+        "management system*", "information system*", "management solution*",
+        "enterprise resource planning", "data warehouse", "data center", "data centre",
+        "data entry", "database*", "dashboard*",
+        "security audit", "cyber*", "penetration test*", "antivirus",
+        "license*", "licence*", "subscription", "upgrade", "cloud",
+        "SMS", "contact center", "contact centre", "call center", "call centre",
+        "BPO", "business process outsourcing", "command center", "command centre",
+        "on-screen marking", "online training", "e-commerce",
+        "advance technology", "advanced technology"
+      ],
+      "departments": []
+    },
+    {
+      "name": "IT equipment & connectivity",
+      "keywords": [
+        "IT", "I.T", "it equipment*", "it. equipment*", "it hardware", "it accessories",
+        "it items", "it work*", "it services",
+        "computer*", "laptop*", "desktop*", "server*", "printer*", "toner*",
+        "networking", "network equipment", "network switch*", "switches", "router*", "SDWAN", "SD-WAN",
+        "internet", "wifi", "wi-fi", "access point*",
+        "CCTV", "surveillance", "NVR", "UPS", "projector*", "multimedia",
+        "smd screen*", "led screen*", "smart led", "pbx", "biometric*",
+        "video conferenc*", "conference system", "audio & video",
+        "fiber optic*", "fibre optic*", "telecom*"
+      ],
+      "departments": [
+        "Punjab Information Technology Board"
+      ]
+    }
+  ]
+}

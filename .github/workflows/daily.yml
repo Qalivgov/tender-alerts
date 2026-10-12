@@ -1,0 +1,35 @@
+name: Daily tender digest
+
+on:
+  schedule:
+    - cron: "0 4 * * *" # 09:00 Pakistan time
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency: tender-digest
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Build the digest
+        env:
+          SMTP_HOST: ${{ secrets.SMTP_HOST }}
+          SMTP_PORT: ${{ secrets.SMTP_PORT }}
+          SMTP_USER: ${{ secrets.SMTP_USER }}
+          SMTP_PASS: ${{ secrets.SMTP_PASS }}
+          MAIL_TO: ${{ secrets.MAIL_TO }}
+        run: python tender_alerts.py
+      - name: Save the page and what has been seen
+        run: |
+          git config user.name "tender-digest"
+          git config user.email "tender-digest@users.noreply.github.com"
+          git add docs/index.html state.json
+          git diff --cached --quiet || git commit -m "Digest for $(TZ=Asia/Karachi date +%F)"
+          git push
