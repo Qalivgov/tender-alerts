@@ -13,7 +13,9 @@ team's shared page.
 """
 
 import argparse
+import base64
 import datetime as dt
+import hashlib
 import html
 import http.cookiejar
 import json
@@ -21,6 +23,7 @@ import os
 import re
 import smtplib
 import ssl
+import subprocess
 import sys
 import time
 import urllib.parse
@@ -35,6 +38,7 @@ CONFIG_FILE = HERE / "config.json"
 STATE_FILE = HERE / "state.json"
 PAGE_FILE = HERE / "docs" / "index.html"
 PAGE_CSS = HERE / "page.css"
+GATE_FILE = HERE / "gate.html"
 ENV_FILE = HERE / ".env"
 
 # The portal's server drops the connection on the cipher suites most clients
@@ -47,6 +51,7 @@ USER_AGENT = (
 )
 MAX_PAGES = 60
 FORGET_AFTER_DAYS = 45
+KDF_ITERATIONS = 200_000
 
 ROW_RE = re.compile(r'<tr class="rg(?:Alt)?Row".*?</tr>', re.S)
 CELL_RE = re.compile(r"<td[^>]*>(.*?)</td>", re.S)
@@ -256,7 +261,7 @@ def load_env(config):
             if len(value) >= 2 and value[0] == value[-1] and value[0] in "'\"":
                 value = value[1:-1]
             env[name.strip()] = value
-    for name in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "MAIL_FROM", "MAIL_TO"):
+    for name in ("SMTP_HOST", "SMTP_PORT", "SMTP_USER", "SMTP_PASS", "MAIL_FROM", "MAIL_TO", "PAGE_PASSWORD"):
         if os.environ.get(name):
             env[name] = os.environ[name]
     return env
@@ -549,6 +554,33 @@ Updated {now:%d %b %Y, %H:%M} Pakistan time.</p>
 """
 
 
+def lock_page(page, password):
+    """Wrap the page in an access-code screen. The page itself is published only as
+    AES-256 ciphertext, which the visitor's browser decrypts with the code they type."""
+    password = password.strip().lower()
+    salt, iv = os.urandom(16), os.urandom(16)
+    key = hashlib.pbkdf2_hmac("sha256", password.encode(), salt, KDF_ITERATIONS, dklen=32)
+    sealed = subprocess.run(
+        ["openssl", "enc", "-aes-256-cbc", "-K", key.hex(), "-iv", iv.hex()],
+        input=page.encode("utf-8"), capture_output=True, check=True,
+    ).stdout
+    encode = lambda raw: base64.b64encode(raw).decode("ascii")
+    payload = {"salt": encode(salt), "iv": encode(iv), "iterations": KDF_ITERATIONS, "data": encode(sealed)}
+    replacements = {
+        "__FAVICON__": FAVICON,
+        "__FONTS__": "".join(f'<link rel="stylesheet" href="{url}">' for url in FONT_CSS),
+        "__SYMBOL__": SYMBOL_SVG,
+        "__WORDMARK__": WORDMARK_SVG,
+        "__BOXES__": '<span class="box"></span>' * len(password),
+        "__COUNT__": str(len(password)),
+        "__PAYLOAD__": json.dumps(payload),
+    }
+    gate = GATE_FILE.read_text(encoding="utf-8")
+    for placeholder, value in replacements.items():
+        gate = gate.replace(placeholder, value)
+    return gate
+
+
 # ------------------------------------------------------------------- email
 
 def send_email(env, recipients, subject, text_body, html_body):
@@ -630,10 +662,14 @@ def run(dry_run):
     )
     log(summary)
 
+    page = render_page(config, matched, new_keys, today, now, len(all_open))
+    if config.get("password_protected"):
+        password = load_env(config).get("PAGE_PASSWORD", "")
+        if not password.strip():
+            raise RuntimeError("config.json asks for a locked page, but PAGE_PASSWORD is not set in .env")
+        page = lock_page(page, password)
     PAGE_FILE.parent.mkdir(exist_ok=True)
-    PAGE_FILE.write_text(
-        render_page(config, matched, new_keys, today, now, len(all_open)), encoding="utf-8"
-    )
+    PAGE_FILE.write_text(page, encoding="utf-8")
     log(f"wrote {PAGE_FILE.relative_to(HERE)}")
 
     if dry_run:
