@@ -34,6 +34,7 @@ HERE = Path(__file__).resolve().parent
 CONFIG_FILE = HERE / "config.json"
 STATE_FILE = HERE / "state.json"
 PAGE_FILE = HERE / "docs" / "index.html"
+PAGE_CSS = HERE / "page.css"
 ENV_FILE = HERE / ".env"
 
 # The portal's server drops the connection on the cipher suites most clients
@@ -366,14 +367,186 @@ def render_text(sections, today, heading, summary):
     return "\n".join(lines)
 
 
-def page_wrap(body, title):
-    return (
-        '<!doctype html>\n<html lang="en"><head><meta charset="utf-8">'
-        '<meta name="viewport" content="width=device-width, initial-scale=1">'
-        '<meta name="robots" content="noindex">'
-        f"<title>{html.escape(title)}</title></head>"
-        f'<body style="margin:0;background:#ffffff">\n{body}\n</body></html>\n'
+SYMBOL_PATHS = (
+    '<path d="M27.5 0 50 22.5 72.5 0v22.5L50 45 27.5 22.5z"/>'
+    '<path d="M27.5 100 50 77.5 72.5 100V77.5L50 55 27.5 77.5z"/>'
+    '<path d="M0 27.5 22.5 50 0 72.5h22.5L45 50 22.5 27.5z"/>'
+    '<path d="M100 27.5 77.5 50 100 72.5H77.5L55 50l22.5-22.5z"/>'
+)
+SYMBOL_SVG = f'<svg class="symbol" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">{SYMBOL_PATHS}</svg>'
+WORDMARK_SVG = (
+    '<svg class="wordmark" viewBox="0 0 576 122" fill="currentColor" role="img" aria-label="Qalix">'
+    '<path fill-rule="evenodd" d="M52 0H68A52 52 0 0 1 120 52V70A52 52 0 0 1 68 122H52A52 52 0 0 1 0 70V52'
+    'A52 52 0 0 1 52 0ZM55 24H62A32 32 0 0 1 94 56V65A32 32 0 0 1 62 97H55A32 32 0 0 1 23 65V56A32 32 0 0 1 55 24Z"/>'
+    '<path d="M48 62 120 96V122H112L48 90Z"/><path d="M138 122 180 0H217L260 122H234.5L199 20 163.5 122Z"/>'
+    '<path d="M290 0H314V73A24 24 0 0 0 338 97H379V122H340A50 50 0 0 1 290 72Z"/><path d="M411.5 0H436V122H411.5Z"/>'
+    '<path d="M465 0H494L575 122H546Z"/><path d="M546 0H575L494 122H465Z"/></svg>'
+)
+FAVICON = (
+    "data:image/svg+xml,"
+    + urllib.parse.quote(
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="-10 -10 120 120">'
+        '<rect x="-10" y="-10" width="120" height="120" rx="22" fill="#10253D"/>'
+        f'<g fill="#F2F2F3">{SYMBOL_PATHS}</g></svg>'
     )
+)
+FONT_CSS = (
+    "https://cdn.jsdelivr.net/npm/@fontsource-variable/syne/wght.css",
+    "https://cdn.jsdelivr.net/npm/@fontsource/open-sauce-sans/400.css",
+    "https://cdn.jsdelivr.net/npm/@fontsource/open-sauce-sans/600.css",
+    "https://cdn.jsdelivr.net/npm/@fontsource/open-sauce-sans/700.css",
+)
+FILTER_SCRIPT = """
+const chips = document.querySelectorAll('button[data-filter]');
+function applyFilter(filter) {
+  document.body.dataset.show = filter;
+  chips.forEach((chip) => chip.setAttribute('aria-pressed', chip.dataset.filter === filter));
+  let any = false;
+  document.querySelectorAll('.category').forEach((section) => {
+    const shown = filter === 'all' || section.querySelector('.tender.is-' + filter) !== null;
+    section.hidden = !shown;
+    any = any || shown;
+  });
+  document.getElementById('empty').hidden = any;
+}
+chips.forEach((chip) => chip.addEventListener('click', () => applyFilter(chip.dataset.filter)));
+"""
+
+
+def slug(name):
+    return re.sub(r"[^a-z0-9]+", "-", name.lower()).strip("-")
+
+
+def tender_card(tender, today, is_new, soon_days):
+    esc = html.escape
+    left = days_left(tender, today)
+    classes = ["tender"]
+    if is_new:
+        classes.append("is-new")
+    if left is not None and 0 <= left <= soon_days:
+        classes.append("is-soon")
+    if left is not None and left <= 2:
+        classes.append("is-urgent")
+
+    badges = []
+    if is_new:
+        badges.append('<span class="badge new">New</span>')
+    if tender["type"] and tender["type"] != "Tender Notice":
+        badges.append(f'<span class="badge kind">{esc(tender["type"])}</span>')
+    if tender["status"]:
+        badges.append(f'<span class="badge flag">PPRA flag: {esc(tender["status"])}</span>')
+
+    docs = [
+        f'<a class="doc" href="{esc(url)}" target="_blank" rel="noopener">{label}</a>'
+        for label, url in (
+            ("Tender notice", tender["notice_url"]),
+            ("Bidding document", tender["bidding_url"]),
+            ("Original tender", tender["detail_url"]),
+        )
+        if url
+    ]
+
+    if tender["closes"]:
+        date = dt.date.fromisoformat(tender["closes"])
+        headline = "Closes <i>today</i>" if left == 0 else f"Closes <i>{date:%d %b}</i>"
+        when = (
+            f"{date:%d %b %Y}" if left == 0
+            else "tomorrow" if left == 1
+            else f"{left} days left" if left > 1
+            else "date passed"
+        )
+    else:
+        headline, when = "Closing date <i>not listed</i>", ""
+
+    return (
+        f'<li class="{" ".join(classes)}"><div class="tender-main">'
+        f'<h3>{esc(tender["title"])}</h3>'
+        f'<p class="dept">{esc(tender["department"])}</p>'
+        + (f'<p class="badges">{"".join(badges)}</p>' if badges else "")
+        + (f'<p class="docs">{"".join(docs)}</p>' if docs else "")
+        + f'</div><div class="tender-close"><strong>{headline}</strong>'
+        + (f"<span>{esc(when)}</span>" if when else "")
+        + "</div></li>"
+    )
+
+
+def render_page(config, matched, new_keys, today, now, portal_total):
+    """The shared team page: tenders grouped by category, closing date on the right."""
+    esc = html.escape
+    soon_days = config.get("closing_soon_days", 5)
+    soon_count = sum(
+        1 for tender in matched
+        if days_left(tender, today) is not None and 0 <= days_left(tender, today) <= soon_days
+    )
+
+    sections, jump_links = [], []
+    for index, group in enumerate(config["groups"]):
+        tenders = by_closing([t for t in matched if t["group"] == group["name"]])
+        anchor = slug(group["name"])
+        jump_links.append(f'<a class="chip" href="#{anchor}">{esc(group["name"])}<b>{len(tenders)}</b></a>')
+        body = (
+            '<ol class="tenders">'
+            + "".join(tender_card(t, today, t["key"] in new_keys, soon_days) for t in tenders)
+            + "</ol>"
+            if tenders
+            else '<p class="none">Nothing open in this category right now.</p>'
+        )
+        sections.append(
+            f'<section class="category{" core" if index == 0 else ""}" id="{anchor}">'
+            f'<div class="category-head"><h2>{esc(group["name"])}</h2>'
+            f'<span class="count">{len(tenders)}</span>'
+            f'<p>{esc(group.get("description", ""))}</p></div>{body}</section>'
+        )
+
+    stats = (
+        ("Open matches", len(matched)),
+        ("New today", len(new_keys)),
+        (f"Closing in {soon_days} days", soon_count),
+        ("Scanned on portal", portal_total),
+    )
+    fonts = "".join(f'<link rel="stylesheet" href="{url}">' for url in FONT_CSS)
+    return f"""<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>Qalix Tender Desk</title>
+<link rel="icon" href="{FAVICON}">
+{fonts}
+<style>
+{PAGE_CSS.read_text(encoding="utf-8")}</style>
+</head>
+<body data-show="all">
+<header class="masthead"><div class="wrap">
+<div class="brand-row">
+<a class="brand" href="https://qalixtech.com" aria-label="Qalix Technologies">{SYMBOL_SVG}{WORDMARK_SVG}</a>
+<span class="brand-tag">Tender Desk</span>
+</div>
+<h1>Punjab software &amp; IT tenders</h1>
+<p class="lede">Daily watchlist from the PPRA Punjab e-procurement portal, sorted by what we can bid on.
+Updated {now:%d %b %Y, %H:%M} Pakistan time.</p>
+<dl class="stats">{"".join(f"<div><dt>{esc(label)}</dt><dd>{value}</dd></div>" for label, value in stats)}</dl>
+</div></header>
+<nav class="toolbar" aria-label="Filters and categories"><div class="wrap">
+<button class="chip" type="button" data-filter="all" aria-pressed="true">All<b>{len(matched)}</b></button>
+<button class="chip" type="button" data-filter="new" aria-pressed="false">New today<b>{len(new_keys)}</b></button>
+<button class="chip" type="button" data-filter="soon" aria-pressed="false">Closing soon<b>{soon_count}</b></button>
+<span class="divider"></span>
+{"".join(jump_links)}
+</div></nav>
+<main class="wrap">
+{"".join(sections)}
+<p id="empty" hidden>No tenders match this filter today.</p>
+</main>
+<footer class="footer"><div class="wrap">
+<span>Source: <a href="{esc(config["url"])}">PPRA Punjab Active Procurement</a>. Refreshed daily at 9:00 AM.</span>
+<span>Qalix Technologies &middot; <a href="https://qalixtech.com">qalixtech.com</a></span>
+</div></footer>
+<script>{FILTER_SCRIPT}</script>
+</body>
+</html>
+"""
 
 
 # ------------------------------------------------------------------- email
@@ -420,7 +593,8 @@ def run(dry_run):
     match = build_matcher(config)
 
     matched = []
-    for tender in fetch_all_tenders(config["url"]):
+    all_open = fetch_all_tenders(config["url"])
+    for tender in all_open:
         group = match(tender)
         if group:
             tender["group"] = group
@@ -456,13 +630,9 @@ def run(dry_run):
     )
     log(summary)
 
-    full_sections = new_sections + [soon_section] + [
-        (f"All open: {name}", by_closing([t for t in matched if t["group"] == name]), "None open.")
-        for name in group_names
-    ]
     PAGE_FILE.parent.mkdir(exist_ok=True)
     PAGE_FILE.write_text(
-        page_wrap(render_html(full_sections, today, heading, summary), heading), encoding="utf-8"
+        render_page(config, matched, new_keys, today, now, len(all_open)), encoding="utf-8"
     )
     log(f"wrote {PAGE_FILE.relative_to(HERE)}")
 
