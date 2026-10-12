@@ -1,0 +1,45 @@
+name: Diagnose portal access
+
+on:
+  workflow_dispatch:
+
+jobs:
+  probe:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Where is this runner
+        shell: bash
+        run: curl -s -m 15 https://ipinfo.io/json | grep -E '"(ip|city|region|country|org)"' || true
+      - name: DNS
+        shell: bash
+        run: nslookup eproc.punjab.gov.pk || true
+      - name: TCP connect to 443 and 80
+        shell: bash
+        run: |
+          for port in 443 80; do
+            curl -s -o /dev/null -m 20 --connect-timeout 15 -w "port $port: connect=%{time_connect}s code=%{http_code} exit=%{exitcode}\n" "telnet://eproc.punjab.gov.pk:$port" </dev/null || true
+          done
+      - name: HTTPS request with the working cipher
+        shell: bash
+        run: |
+          curl -sS -m 60 --connect-timeout 20 --tlsv1.2 --tls-max 1.2 --ciphers ECDHE-RSA-AES128-SHA256 \
+            -A "Mozilla/5.0" -o /dev/null \
+            -w "https: code=%{http_code} connect=%{time_connect}s tls=%{time_appconnect}s total=%{time_total}s bytes=%{size_download}\n" \
+            https://eproc.punjab.gov.pk/ActiveTenders.aspx || true
+      - name: Plain HTTP request
+        shell: bash
+        run: |
+          curl -sS -m 60 --connect-timeout 20 -A "Mozilla/5.0" -o /dev/null \
+            -w "http: code=%{http_code} connect=%{time_connect}s total=%{time_total}s redirect=%{redirect_url}\n" \
+            http://eproc.punjab.gov.pk/ActiveTenders.aspx || true
+      - name: Other Punjab government sites from here
+        shell: bash
+        run: |
+          for site in https://ppra.punjab.gov.pk/ https://www.punjab.gov.pk/ https://pitb.gov.pk/; do
+            curl -sS -m 40 --connect-timeout 15 -A "Mozilla/5.0" -o /dev/null \
+              -w "$site code=%{http_code} connect=%{time_connect}s total=%{time_total}s\n" "$site" || true
+          done
