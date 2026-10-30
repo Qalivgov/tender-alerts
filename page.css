@@ -388,45 +388,47 @@ main { padding-bottom: 56px; }
 .doc::after { content: " \2197"; }
 .doc:hover { background: var(--navy); border-color: var(--navy); color: var(--mist); }
 
-.tender-close {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  justify-content: center;
-  gap: 4px;
-  min-width: 176px;
-  padding: 18px 20px;
+.tender-dates {
+  display: grid;
+  grid-template-columns: repeat(3, 108px);
   border-left: 1px solid var(--line);
   background: #f8f9fb;
-  text-align: right;
 }
 
-.tender-close strong {
+.tile {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  gap: 6px;
+  padding: 16px 8px;
+  text-align: center;
+}
+
+.tile + .tile { border-left: 1px solid var(--line); }
+
+.tile span {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.tile strong {
   font-size: 16px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.04em;
   text-transform: uppercase;
   white-space: nowrap;
-  font-variant-numeric: tabular-nums;
+  font-variant-numeric: lining-nums tabular-nums;
 }
 
-.tender-close span {
-  font-size: 12.5px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.is-urgent .tender-close strong,
-.is-urgent .tender-close span { color: var(--alert); }
-
-.tender-close .published,
-.is-urgent .tender-close .published {
-  margin-top: 6px;
-  padding-top: 6px;
-  border-top: 1px solid var(--line);
-  font-size: 12px;
-  color: var(--muted);
-}
+.tile.published strong { color: var(--muted); }
+.tile.left strong { font-size: 20px; }
+.is-urgent .tile.closes strong,
+.is-urgent .tile.left strong { color: var(--alert); }
 
 /* ----------------------------------------------------------------- filters */
 
@@ -476,10 +478,9 @@ body[data-show="soon"] .tender:not(.is-soon) { display: none; }
   .stats div:nth-child(3) { padding-left: 0; border-left: 0; }
   .stats div:nth-child(n + 3) { border-top: 1px solid rgba(242, 242, 243, 0.22); }
   .tender-main { padding: 14px; }
-  .tender-close { min-width: 0; padding: 14px 12px; }
-  .tender-close strong { font-size: 14px; white-space: normal; }
-  .tender-close strong i { display: block; }
+  .tender { grid-template-columns: 1fr; }
+  .tender-dates { grid-template-columns: repeat(3, 1fr); border-left: 0; border-top: 1px solid var(--line); }
+  .tile { padding: 12px 6px; }
   .category-head h2 { font-size: 20px; }
 }
 
-.tender-close strong i { font-style: normal; }

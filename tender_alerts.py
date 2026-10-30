@@ -452,17 +452,18 @@ def tender_card(tender, today, is_new, soon_days):
         if url
     ]
 
-    if tender["closes"]:
-        date = dt.date.fromisoformat(tender["closes"])
-        headline = "Closes <i>today</i>" if left == 0 else f"Closes <i>{date:%d %b}</i>"
-        when = (
-            f"{date:%d %b %Y}" if left == 0
-            else "tomorrow" if left == 1
-            else f"{left} days left" if left > 1
-            else "date passed"
-        )
-    else:
-        headline, when = "Closing date <i>not listed</i>", ""
+    short_date = lambda iso: f"{dt.date.fromisoformat(iso):%d %b}" if iso else "\u2014"
+    remaining = (
+        "\u2014" if left is None
+        else "Closed" if left < 0
+        else "Today" if left == 0
+        else str(left)
+    )
+    tiles = (
+        ("published", "Publish date", short_date(tender["published"])),
+        ("closes", "Closing date", short_date(tender["closes"])),
+        ("left", "Days left", remaining),
+    )
 
     return (
         f'<li class="{" ".join(classes)}"><div class="tender-main">'
@@ -470,11 +471,10 @@ def tender_card(tender, today, is_new, soon_days):
         f'<p class="dept">{esc(tender["department"])}</p>'
         + (f'<p class="badges">{"".join(badges)}</p>' if badges else "")
         + (f'<p class="docs">{"".join(docs)}</p>' if docs else "")
-        + f'</div><div class="tender-close"><strong>{headline}</strong>'
-        + (f"<span>{esc(when)}</span>" if when else "")
-        + (
-            f'<span class="published">Published {dt.date.fromisoformat(tender["published"]):%d %b}</span>'
-            if tender["published"] else ""
+        + '</div><div class="tender-dates">'
+        + "".join(
+            f'<div class="tile {name}"><span>{label}</span><strong>{esc(value)}</strong></div>'
+            for name, label, value in tiles
         )
         + "</div></li>"
     )
