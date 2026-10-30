@@ -472,6 +472,10 @@ def tender_card(tender, today, is_new, soon_days):
         + (f'<p class="docs">{"".join(docs)}</p>' if docs else "")
         + f'</div><div class="tender-close"><strong>{headline}</strong>'
         + (f"<span>{esc(when)}</span>" if when else "")
+        + (
+            f'<span class="published">Published {dt.date.fromisoformat(tender["published"]):%d %b}</span>'
+            if tender["published"] else ""
+        )
         + "</div></li>"
     )
 
